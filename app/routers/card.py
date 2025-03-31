@@ -1,6 +1,6 @@
 # app/routers/card.py
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from app.database import client
 from app.models.card import Card
 from bson import ObjectId
@@ -49,3 +49,24 @@ async def get_user_cards(user_id: str):
 
     # Converte os cartões para formato JSON-friendly
     return [serialize_card(card) for card in cards]
+
+
+cards_collection = client.db.cards
+
+# Atualizar Cartão
+@router.put("/users/{user_id}/cards/{card_id}")
+async def update_card(user_id: str, card_id: str, card_data: dict):
+    if not cards_collection.find_one({"_id": ObjectId(card_id), "user_id": user_id}):
+        raise HTTPException(status_code=404, detail="Card not found")
+
+    cards_collection.update_one({"_id": ObjectId(card_id)}, {"$set": card_data})
+    return {"message": "Card updated successfully"}
+
+# Deletar Cartão
+@router.delete("/users/{user_id}/cards/{card_id}")
+async def delete_card(user_id: str, card_id: str):
+    result = cards_collection.delete_one({"_id": ObjectId(card_id), "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Card not found")
+
+    return {"message": "Card deleted successfully"}
