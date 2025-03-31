@@ -28,6 +28,14 @@ async def get_all_users():
     # Converter todos os `_id` para string antes de retornar
     return [serialize_user(user) for user in users]
 
+@router.get("/users/{user_id}")
+async def get_user_by_id(user_id: str):
+    users_collection = client.db.users
+    user = users_collection.find_one({"_id": ObjectId(user_id)})
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return serialize_user(user)
+
 users_collection = client.db.users
 
 # Atualizar Usuário
