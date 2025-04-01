@@ -1,12 +1,13 @@
 from fastapi import FastAPI
-from app.routers import user, card, product
+from app.routers import user, card, product, order
 
 app = FastAPI()
 
 # Incluindo os routers
 app.include_router(user.router)
 app.include_router(card.router)
-app.include_router(product.router)  # <- Certifique-se de que esse está aqui!
+app.include_router(product.router)
+app.include_router(order.router)
 
 @app.get("/")
 def home():
