@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from app.database import client
 from app.models.order import Order
 from bson import ObjectId
+from fastapi.encoders import jsonable_encoder
 
 router = APIRouter()
 
@@ -53,3 +54,38 @@ async def create_order(order: Order):
 
     result = orders_collection.insert_one(order_dict)
     return {"id": str(result.inserted_id), "total_price": total_price, "status": "confirmed"}
+
+def serialize_order(order):
+    # Convertendo ObjectId para string antes de retornar o pedido
+    order = dict(order)  # Convertendo o MongoDB document para dict
+    for key, value in order.items():
+        if isinstance(value, ObjectId):
+            order[key] = str(value)  # Convertendo ObjectId para string
+    return order
+
+# Listar todos os pedidos
+@router.get("/orders/")
+async def get_all_orders():
+    orders = list(orders_collection.find())
+    
+    if not orders:
+        raise HTTPException(status_code=404, detail="No orders found")
+
+    # Serializando os pedidos antes de retornar
+    return [serialize_order(order) for order in orders]
+
+# Listar pedidos por ID do usuário
+@router.get("/orders/{user_id}")
+async def get_orders_by_user(user_id: str):
+    # Verifica se o user_id é um ObjectId válido
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(status_code=400, detail="Invalid user_id format")
+    
+    # Busca os pedidos do usuário
+    orders = list(orders_collection.find({"user_id": ObjectId(user_id)}))  # Convertendo user_id para ObjectId
+
+    if not orders:
+        raise HTTPException(status_code=404, detail="No orders found for this user")
+
+    # Serializando os pedidos antes de retornar
+    return [serialize_order(order) for order in orders]
