@@ -7,11 +7,17 @@ from bson import ObjectId
 router = APIRouter()
 
 # Rota para criar um usuário
+# Criar usuário (com verificação de e-mail único)
 @router.post("/users/")
 async def create_user(user: User):
-    users_collection = client.db.users
+    # Verifica se já existe um usuário com esse e-mail
+    existing_user = users_collection.find_one({"email": user.email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
     user_dict = user.dict()
     result = users_collection.insert_one(user_dict)
+    
     return {"id": str(result.inserted_id)}
 
 def serialize_user(user):
