@@ -1,5 +1,3 @@
-# app/models/card.py
-
 from pydantic import BaseModel
 
 class Card(BaseModel):

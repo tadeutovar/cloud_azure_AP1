@@ -1,5 +1,3 @@
-# app/routers/card.py
-
 from fastapi import APIRouter, HTTPException
 from app.database import client
 from app.models.card import Card

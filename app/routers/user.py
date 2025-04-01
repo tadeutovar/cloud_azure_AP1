@@ -1,5 +1,3 @@
-# app/routers/user.py
-
 from fastapi import APIRouter, HTTPException
 from app.database import client
 from app.models.user import User
