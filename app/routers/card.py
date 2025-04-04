@@ -1,70 +1,53 @@
-from fastapi import APIRouter, HTTPException
-from app.database import client
-from app.models.card import Card
-from bson import ObjectId
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
+from app.database.mysql import get_db
+from app.models.card import Card as CardModel
+from app.models.user import User as UserModel
+from app.schemas.card import CardCreate, CardOut
 
 router = APIRouter()
 
-@router.post("/users/{user_id}/cards/")
-async def create_card(user_id: str, card: dict):
-    users_collection = client.db.users
-    cards_collection = client.db.cards
-
-    # Verifica se o usuário existe
-    user = users_collection.find_one({"_id": ObjectId(user_id)})
+# Criar cartão para um usuário
+@router.post("/users/{user_id}/cards/", response_model=CardOut)
+def create_card(user_id: int, card: CardCreate, db: Session = Depends(get_db)):
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Insere o novo cartão
-    card["user_id"] = user_id
-    card_id = cards_collection.insert_one(card).inserted_id
+    new_card = CardModel(**card.dict(), user_id=user_id)
+    db.add(new_card)
+    db.commit()
+    db.refresh(new_card)
+    return new_card
 
-    # Adiciona o cartão na lista de cartões do usuário
-    users_collection.update_one(
-        {"_id": ObjectId(user_id)},
-        {"$push": {"cards": str(card_id)}}
-    )
-
-    return {"message": "Card created successfully", "card_id": str(card_id)}
-
-def serialize_card(card):
-    card["_id"] = str(card["_id"])
-    return card
-
-@router.get("/users/{user_id}/cards/")
-async def get_user_cards(user_id: str):
-    users_collection = client.db.users
-    cards_collection = client.db.cards
-
-    # Verifica se o usuário existe
-    user = users_collection.find_one({"_id": ObjectId(user_id)})
+# Listar cartões de um usuário
+@router.get("/users/{user_id}/cards/", response_model=list[CardOut])
+def get_user_cards(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if not user:
-        return {"error": "User not found"}
+        raise HTTPException(status_code=404, detail="User not found")
 
-    # Converte os card_ids para string antes de buscar no banco
-    card_ids = [ObjectId(card_id) for card_id in user.get("cards", []) if ObjectId.is_valid(card_id)]
-    cards = list(cards_collection.find({"_id": {"$in": card_ids}}))
+    return db.query(CardModel).filter(CardModel.user_id == user_id).all()
 
-    # Converte os cartões para formato JSON-friendly
-    return [serialize_card(card) for card in cards]
-
-
-cards_collection = client.db.cards
-
-# Atualizar Cartão
+# Atualizar cartão
 @router.put("/users/{user_id}/cards/{card_id}")
-async def update_card(user_id: str, card_id: str, card_data: dict):
-    if not cards_collection.find_one({"_id": ObjectId(card_id), "user_id": user_id}):
+def update_card(user_id: int, card_id: int, card_data: dict, db: Session = Depends(get_db)):
+    card = db.query(CardModel).filter(CardModel.id == card_id, CardModel.user_id == user_id).first()
+    if not card:
         raise HTTPException(status_code=404, detail="Card not found")
 
-    cards_collection.update_one({"_id": ObjectId(card_id)}, {"$set": card_data})
+    for key, value in card_data.items():
+        setattr(card, key, value)
+    db.commit()
     return {"message": "Card updated successfully"}
 
-# Deletar Cartão
+# Deletar cartão
 @router.delete("/users/{user_id}/cards/{card_id}")
-async def delete_card(user_id: str, card_id: str):
-    result = cards_collection.delete_one({"_id": ObjectId(card_id), "user_id": user_id})
-    if result.deleted_count == 0:
+def delete_card(user_id: int, card_id: int, db: Session = Depends(get_db)):
+    card = db.query(CardModel).filter(CardModel.id == card_id, CardModel.user_id == user_id).first()
+    if not card:
         raise HTTPException(status_code=404, detail="Card not found")
 
+    db.delete(card)
+    db.commit()
     return {"message": "Card deleted successfully"}

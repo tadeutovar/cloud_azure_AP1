@@ -1,61 +1,56 @@
-from fastapi import APIRouter, HTTPException
-from app.database import client
-from app.models.user import User
-from app.models.card import Card
-from bson import ObjectId
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
+from app.database.mysql import get_db
+from app.models.user import User as UserModel
+from app.schemas.user import UserCreate, UserOut
 
 router = APIRouter()
 
-# Rota para criar um usuário
-# Criar usuário (com verificação de e-mail único)
-@router.post("/users/")
-async def create_user(user: User):
-    # Verifica se já existe um usuário com esse e-mail
-    existing_user = users_collection.find_one({"email": user.email})
+# Criar usuário (verifica e-mail único)
+@router.post("/users/", response_model=UserOut)
+def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    existing_user = db.query(UserModel).filter(UserModel.email == user.email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    user_dict = user.dict()
-    result = users_collection.insert_one(user_dict)
-    
-    return {"id": str(result.inserted_id)}
+    new_user = UserModel(**user.dict())
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
 
-def serialize_user(user):
-    user["_id"] = str(user["_id"])
+# Buscar todos os usuários
+@router.get("/users/", response_model=list[UserOut])
+def get_all_users(db: Session = Depends(get_db)):
+    return db.query(UserModel).all()
+
+# Buscar usuário por ID
+@router.get("/users/{user_id}", response_model=UserOut)
+def get_user_by_id(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     return user
 
-@router.get("/users/")
-async def get_all_users():
-    users_collection = client.db.users
-    users = list(users_collection.find())
-
-    # Converter todos os `_id` para string antes de retornar
-    return [serialize_user(user) for user in users]
-
-@router.get("/users/{user_id}")
-async def get_user_by_id(user_id: str):
-    users_collection = client.db.users
-    user = users_collection.find_one({"_id": ObjectId(user_id)})
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return serialize_user(user)
-
-users_collection = client.db.users
-
-# Atualizar Usuário
+# Atualizar usuário
 @router.put("/users/{user_id}")
-async def update_user(user_id: str, user_data: dict):
-    if not users_collection.find_one({"_id": ObjectId(user_id)}):
+def update_user(user_id: int, user_data: dict, db: Session = Depends(get_db)):
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    users_collection.update_one({"_id": ObjectId(user_id)}, {"$set": user_data})
+    for key, value in user_data.items():
+        setattr(user, key, value)
+    db.commit()
     return {"message": "User updated successfully"}
 
-# Deletar Usuário
+# Deletar usuário
 @router.delete("/users/{user_id}")
-async def delete_user(user_id: str):
-    result = users_collection.delete_one({"_id": ObjectId(user_id)})
-    if result.deleted_count == 0:
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    db.delete(user)
+    db.commit()
     return {"message": "User deleted successfully"}
