@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from app.database_mongo import client
+from app.database.database_mongo import client
 from app.models.product import Product
 from bson import ObjectId
 

@@ -6,7 +6,7 @@ from datetime import datetime
 
 # Banco de dados
 from app.database.mysql import get_db
-from app.database_mongo import client
+from app.database.database_mongo import client
 
 # Models do MySQL
 from app.models.user import User
