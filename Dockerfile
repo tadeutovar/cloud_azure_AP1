@@ -7,8 +7,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy project files
-COPY . .
+# Copy only the app folder and other necessary files
+COPY ./app ./app
 
 # Set environment variable to avoid buffering
 ENV PYTHONUNBUFFERED=1
